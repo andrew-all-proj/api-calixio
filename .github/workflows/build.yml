@@ -37,18 +37,3 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-      - name: Make image public (org)
-        if: github.event_name != 'pull_request' && github.event.repository.owner.type == 'Organization'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OWNER: ${{ github.repository_owner }}
-          PACKAGE: ${{ github.event.repository.name }}
-        run: |
-          gh api -X PATCH /orgs/$OWNER/packages/container/$PACKAGE/visibility -f visibility=public
-      - name: Make image public (user)
-        if: github.event_name != 'pull_request' && github.event.repository.owner.type == 'User'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PACKAGE: ${{ github.event.repository.name }}
-        run: |
-          gh api -X PATCH /user/packages/container/$PACKAGE/visibility -f visibility=public
