@@ -1,0 +1,93 @@
+Calixio — backend видеоконференций на Go
+=======================================
+
+Что делает сервис
+-----------------
+- Авторизует пользователя (mock login) и выдает JWT
+- Управляет комнатами через LiveKit Server API
+- Генерирует LiveKit access token для входа в комнату
+- Принимает webhook события join/leave от LiveKit
+- Не обрабатывает аудио/видео: медиа идет напрямую через LiveKit SFU
+
+Как это работает
+----------------
+1) Клиент получает JWT через POST /auth/login.
+2) Клиент создает комнату через POST /rooms (JWT обязателен).
+3) Клиент получает LiveKit access token через POST /rooms/{id}/join.
+4) Клиент подключается к LiveKit SFU с этим токеном.
+5) LiveKit отправляет webhook события в /livekit/webhook, backend сохраняет участников в Redis.
+
+API (MVP)
+---------
+- POST /auth/login
+- POST /auth/register
+- POST /auth/refresh
+- POST /rooms
+- POST /rooms/{id}/join
+- POST /rooms/{id}/end
+- POST /livekit/webhook
+
+Запуск через Docker
+-------------------
+1) Скопировать env:
+   cp .env.example .env
+2) Собрать и запустить:
+   docker compose up --build
+3) Применить миграции:
+   make migrate-up
+
+Запуск локально (без Docker)
+----------------------------
+1) Установить зависимости:
+   go mod tidy
+2) Поднять инфраструктуру (Postgres/Redis/LiveKit):
+   docker compose -f docker-compose.dev.yml up -d
+3) Настроить переменные окружения (см. .env.example).
+4) Применить миграции:
+   make migrate-up
+5) Запуск:
+   go run ./cmd/api
+
+Frontend для локальных тестов
+-----------------------------
+Готовый React UI лежит в папке front.
+
+Запуск:
+1) cd front
+2) cp .env.example .env
+3) npm install
+4) npm run dev
+
+Для тестов на телефоне нужен HTTPS. Сгенерируй сертификат под IP в LAN:
+./scripts/gen-cert.sh 192.168.1.10
+Запусти прокси:
+docker compose -f docker-compose.dev.yml up -d caddy
+После этого открой https://192.168.1.10:8443
+LiveKit сигналинг будет доступен по wss://192.168.1.10:8443 (через Caddy).
+
+Миграции (goose)
+----------------
+Установка:
+go install github.com/pressly/goose/v3/cmd/goose@latest
+
+Команды:
+- make migrate-up
+- make migrate-down
+- make migrate-status
+- make migrate-create name=add_table
+
+Переменные окружения
+--------------------
+- HTTP_ADDR
+- DATABASE_URL
+- REDIS_ADDR
+- REDIS_DB
+- JWT_SECRET
+- ACCESS_TOKEN_TTL
+- REFRESH_TOKEN_TTL
+- LIVEKIT_API_KEY
+- LIVEKIT_API_SECRET
+- LIVEKIT_HOST
+- LIVEKIT_WEBHOOK_SECRET
+- LIVEKIT_ROOM_AUTO_TIMEOUT
+- LIVEKIT_TOKEN_TTL

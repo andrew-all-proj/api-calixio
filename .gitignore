@@ -1,0 +1,28 @@
+.env
+.env.local
+certs/
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.prof
+
+# Go workspace/cache
+bin/
+dist/
+tmp/
+
+# Frontend (if present)
+front/node_modules/
+front/dist/
+
+# IDE/editor files
+.idea/
+.vscode/
+*.swp
+.DS_Store
