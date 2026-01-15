@@ -1,6 +1,8 @@
 package rooms
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"net/http"
 
@@ -56,6 +58,15 @@ func (h *Handler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) JoinRoom(w http.ResponseWriter, r *http.Request) {
 	userID := authn.UserIDFromContext(r.Context())
+	if userID == "" {
+		guestID, err := newGuestID()
+		if err != nil {
+			h.logger.Error("guest identity", zap.Error(err))
+			httputil.RespondError(w, http.StatusInternalServerError, "guest_identity_failed")
+			return
+		}
+		userID = guestID
+	}
 	roomID := httputil.ChiParam(r, "id")
 	if roomID == "" {
 		httputil.RespondError(w, http.StatusBadRequest, "room_id_required")
@@ -83,6 +94,14 @@ func (h *Handler) JoinRoom(w http.ResponseWriter, r *http.Request) {
 		Token:     jwt,
 		ExpiresIn: h.jwt.AccessTTLSeconds(),
 	})
+}
+
+func newGuestID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return "guest-" + hex.EncodeToString(b), nil
 }
 
 func (h *Handler) EndRoom(w http.ResponseWriter, r *http.Request) {
