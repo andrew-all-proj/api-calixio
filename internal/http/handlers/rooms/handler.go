@@ -56,10 +56,6 @@ func (h *Handler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) JoinRoom(w http.ResponseWriter, r *http.Request) {
 	userID := authn.UserIDFromContext(r.Context())
-	if userID == "" {
-		httputil.RespondError(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
 	roomID := httputil.ChiParam(r, "id")
 	if roomID == "" {
 		httputil.RespondError(w, http.StatusBadRequest, "room_id_required")

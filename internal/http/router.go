@@ -46,10 +46,12 @@ func NewRouter(
 	r.Post("/auth/refresh", authHandler.Refresh)
 
 	r.Route("/rooms", func(r chi.Router) {
-		r.Use(AuthMiddleware(jwt, tokens))
-		r.Post("/", roomHandler.CreateRoom)
 		r.Post("/{id}/join", roomHandler.JoinRoom)
-		r.Post("/{id}/end", roomHandler.EndRoom)
+		r.Group(func(r chi.Router) {
+			r.Use(AuthMiddleware(jwt, tokens))
+			r.Post("/", roomHandler.CreateRoom)
+			r.Post("/{id}/end", roomHandler.EndRoom)
+		})
 	})
 
 	r.Post("/livekit/webhook", webhookHandler.LiveKitWebhook)

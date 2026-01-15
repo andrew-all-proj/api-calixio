@@ -13,7 +13,7 @@ Calixio — backend видеоконференций на Go
 ----------------
 1) Клиент получает JWT через POST /auth/login.
 2) Клиент создает комнату через POST /rooms (JWT обязателен).
-3) Клиент получает LiveKit access token через POST /rooms/{id}/join.
+3) Клиент получает LiveKit access token через POST /rooms/{id}/join (JWT не обязателен).
 4) Клиент подключается к LiveKit SFU с этим токеном.
 5) LiveKit отправляет webhook события в /livekit/webhook, backend сохраняет участников в Redis.
 
@@ -22,9 +22,9 @@ API (MVP)
 - POST /auth/login
 - POST /auth/register
 - POST /auth/refresh
-- POST /rooms
-- POST /rooms/{id}/join
-- POST /rooms/{id}/end
+- POST /rooms (JWT обязателен)
+- POST /rooms/{id}/join (JWT не обязателен)
+- POST /rooms/{id}/end (JWT обязателен)
 - POST /livekit/webhook
 
 Запуск через Docker
