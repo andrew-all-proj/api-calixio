@@ -84,6 +84,7 @@ type LoginInput struct {
 
 type LoginResult struct {
 	UserID       string
+	Name         string
 	AccessToken  string
 	RefreshToken string
 	AccessTTL    time.Duration
@@ -128,6 +129,7 @@ func (s *AuthService) Login(ctx context.Context, in LoginInput) (LoginResult, er
 
 	return LoginResult{
 		UserID:       user.ID,
+		Name:         user.Name,
 		AccessToken:  accessToken,
 		RefreshToken: refreshRaw,
 		AccessTTL:    s.accessTTL,

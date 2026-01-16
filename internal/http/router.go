@@ -35,8 +35,8 @@ func NewRouter(
 		AllowedOrigins:   corsOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Requested-With"},
-		ExposedHeaders:   []string{"Link"},
-		AllowCredentials: false,
+		ExposedHeaders:   []string{"Link", "Set-Cookie"},
+		AllowCredentials: true,
 		MaxAge:           300,
 	}))
 	r.Use(LoggingMiddleware(logger))

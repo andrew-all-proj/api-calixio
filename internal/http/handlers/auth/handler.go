@@ -3,6 +3,7 @@ package auth
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"calixio/internal/http/authn"
 	"calixio/internal/http/dto"
@@ -18,6 +19,8 @@ type Handler struct {
 	jwt    *authn.JWTService
 	logger *zap.Logger
 }
+
+const refreshCookieName = "refresh_token"
 
 func NewHandler(auth *service.AuthService, jwt *authn.JWTService, logger *zap.Logger) *Handler {
 	return &Handler{auth: auth, jwt: jwt, logger: logger}
@@ -48,9 +51,10 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	setRefreshCookie(w, r, result.RefreshToken, result.RefreshTTL)
 	httputil.RespondJSON(w, http.StatusOK, dto.LoginResponse{
+		Name:         result.Name,
 		AccessToken:  result.AccessToken,
-		RefreshToken: result.RefreshToken,
 		AccessTTL:    int(result.AccessTTL.Seconds()),
 		RefreshTTL:   int(result.RefreshTTL.Seconds()),
 	})
@@ -87,17 +91,13 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
-	var req dto.RefreshRequest
-	if err := httputil.DecodeJSON(r, &req); err != nil {
-		httputil.RespondError(w, http.StatusBadRequest, "invalid_json")
-		return
-	}
-	if err := httputil.ValidateStruct(req); err != nil {
-		httputil.RespondError(w, http.StatusBadRequest, "validation_failed")
+	cookie, err := r.Cookie(refreshCookieName)
+	if err != nil {
+		httputil.RespondError(w, http.StatusBadRequest, "refresh_token_required")
 		return
 	}
 
-	result, err := h.auth.Refresh(r.Context(), req.RefreshToken)
+	result, err := h.auth.Refresh(r.Context(), cookie.Value)
 	if err != nil {
 		if errors.Is(err, repository.ErrSessionNotFound) {
 			httputil.RespondError(w, http.StatusUnauthorized, "invalid_refresh")
@@ -108,12 +108,30 @@ func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	setRefreshCookie(w, r, result.RefreshToken, result.RefreshTTL)
 	httputil.RespondJSON(w, http.StatusOK, dto.RefreshResponse{
 		UserID:       result.UserID,
 		AccessToken:  result.AccessToken,
-		RefreshToken: result.RefreshToken,
 		AccessTTL:    int(result.AccessTTL.Seconds()),
 		RefreshTTL:   int(result.RefreshTTL.Seconds()),
 		Version:      result.Version,
 	})
+}
+
+func setRefreshCookie(w http.ResponseWriter, r *http.Request, token string, ttl time.Duration) {
+	cookie := &http.Cookie{
+		Name:     refreshCookieName,
+		Value:    token,
+		HttpOnly: true,
+		Path:     "/",
+		MaxAge:   int(ttl.Seconds()),
+		Expires:  time.Now().Add(ttl),
+		SameSite: http.SameSiteNoneMode,
+	}
+	if r.TLS != nil {
+		cookie.Secure = true
+	} else {
+		cookie.SameSite = http.SameSiteLaxMode
+	}
+	http.SetCookie(w, cookie)
 }

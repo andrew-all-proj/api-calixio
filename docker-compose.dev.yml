@@ -24,17 +24,6 @@ services:
       - "50000-50100:50000-50100/udp"
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml:ro
-  caddy:
-    image: caddy:2
-    ports:
-      - "8443:8443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./certs:/certs:ro
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      - livekit
 
 volumes:
   pgdata:

@@ -58,12 +58,9 @@ Frontend для локальных тестов
 3) npm install
 4) npm run dev
 
-Для тестов на телефоне нужен HTTPS. Сгенерируй сертификат под IP в LAN:
-./scripts/gen-cert.sh 192.168.1.10
-Запусти прокси:
-docker compose -f docker-compose.dev.yml up -d caddy
-После этого открой https://192.168.1.10:8443
-LiveKit сигналинг будет доступен по wss://192.168.1.10:8443 (через Caddy).
+LiveKit сигналинг доступен напрямую:
+- при docker-compose.dev.yml: ws://localhost:7882
+- при docker-compose.yml: ws://localhost:7880
 
 Миграции (goose)
 ----------------

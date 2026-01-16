@@ -6,8 +6,8 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
+	Name         string `json:"name"`
 	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
 	AccessTTL    int    `json:"access_ttl"`
 	RefreshTTL   int    `json:"refresh_ttl"`
 }
@@ -22,14 +22,11 @@ type RegisterResponse struct {
 	UserID string `json:"user_id"`
 }
 
-type RefreshRequest struct {
-	RefreshToken string `json:"refresh_token" validate:"required"`
-}
+type RefreshRequest struct{}
 
 type RefreshResponse struct {
 	UserID       string `json:"user_id"`
 	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
 	AccessTTL    int    `json:"access_ttl"`
 	RefreshTTL   int    `json:"refresh_ttl"`
 	Version      int    `json:"version"`
