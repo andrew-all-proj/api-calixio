@@ -31,8 +31,18 @@ func NewRouter(
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
+	allowedOrigins := append([]string{}, corsOrigins...)
+	allowedOrigins = append(allowedOrigins, "https://calixio.managetlg.com")
+	filtered := make([]string, 0, len(allowedOrigins))
+	for _, origin := range allowedOrigins {
+		if origin == "*" {
+			continue
+		}
+		filtered = append(filtered, origin)
+	}
+
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   append(corsOrigins, "https://calixio.managetlg.com"),
+		AllowedOrigins:   filtered,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Requested-With"},
 		ExposedHeaders:   []string{"Link", "Set-Cookie"},
