@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"io"
 	"net/http"
 
 	"calixio/internal/http/authn"
@@ -57,6 +58,16 @@ func (h *Handler) CreateRoom(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) JoinRoom(w http.ResponseWriter, r *http.Request) {
+	var req dto.JoinRoomRequest
+	if err := httputil.DecodeJSON(r, &req); err != nil && !errors.Is(err, io.EOF) {
+		httputil.RespondError(w, http.StatusBadRequest, "invalid_json")
+		return
+	}
+	if err := httputil.ValidateStruct(req); err != nil {
+		httputil.RespondError(w, http.StatusBadRequest, "validation_failed")
+		return
+	}
+
 	userID := authn.UserIDFromContext(r.Context())
 	if userID == "" {
 		guestID, err := newGuestID()
@@ -66,6 +77,11 @@ func (h *Handler) JoinRoom(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		userID = guestID
+	}
+
+	h.logger.Info("joining room", zap.String("user_name", req.UserName))
+	if req.UserName != "" {
+		userID = req.UserName
 	}
 	roomID := httputil.ChiParam(r, "id")
 	if roomID == "" {

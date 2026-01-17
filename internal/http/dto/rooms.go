@@ -11,6 +11,10 @@ type RoomResponse struct {
 	CreatedAt string `json:"created_at"`
 }
 
+type JoinRoomRequest struct {
+	UserName string `json:"user_name" validate:"omitempty,min=1,max=36"`
+}
+
 type JoinRoomResponse struct {
 	RoomID    string `json:"room_id"`
 	RoomName  string `json:"room_name"`
