@@ -1,5 +1,6 @@
 DB_URL ?= postgres://postgres:postgres@localhost:5432/livekit?sslmode=disable
-GOOSE ?= go run github.com/pressly/goose/v3/cmd/goose@latest
+GOOSE_VERSION ?= v3.26.0
+GOOSE ?= go run github.com/pressly/goose/v3/cmd/goose@$(GOOSE_VERSION)
 MIGRATIONS_DIR ?= migrations
 
 .PHONY: migrate-up migrate-down migrate-status migrate-create

@@ -54,7 +54,7 @@ func (c *Client) DeleteRoom(ctx context.Context, name string) error {
 	return err
 }
 
-func (c *Client) GenerateToken(identity, roomName string) (string, error) {
+func (c *Client) GenerateToken(identity, roomName, participantName string) (string, error) {
 	canPublish := boolPtr(true)
 	canSubscribe := boolPtr(true)
 	grant := &auth.VideoGrant{
@@ -66,6 +66,9 @@ func (c *Client) GenerateToken(identity, roomName string) (string, error) {
 
 	token := auth.NewAccessToken(c.apiKey, c.apiSecret)
 	token.SetIdentity(identity)
+	if participantName != "" {
+		token.SetName(participantName)
+	}
 	token.SetVideoGrant(grant)
 	token.SetValidFor(c.tokenTTL)
 	return token.ToJWT()

@@ -28,6 +28,30 @@ type Config struct {
 		RoomAutoTimeout time.Duration
 		TokenTTL        time.Duration
 	}
+	AWS struct {
+		Bucket          string
+		Region          string
+		AccessKeyID     string
+		SecretAccessKey string
+		Endpoint        string
+		PathStyle       bool
+		PublicURL       string
+		PresignTTL      time.Duration
+		MaxUploadBytes  int64
+		AllowedMIMEs    []string
+	}
+	Transcoding struct {
+		Enabled       bool
+		FFmpegPath    string
+		FFprobePath   string
+		WorkDir       string
+		HLSSegmentSec int
+		QueueSize     int
+		JobTimeout    time.Duration
+	}
+	MediaPlayback struct {
+		SignedTTL time.Duration
+	}
 }
 
 func Load() (*Config, error) {
@@ -53,6 +77,33 @@ func Load() (*Config, error) {
 	cfg.LiveKit.WebhookSecret = getenv("LIVEKIT_WEBHOOK_SECRET", "devwebhook")
 	cfg.LiveKit.RoomAutoTimeout = getenvDuration("LIVEKIT_ROOM_AUTO_TIMEOUT", 2*time.Hour)
 	cfg.LiveKit.TokenTTL = getenvDuration("LIVEKIT_TOKEN_TTL", 2*time.Hour)
+
+	cfg.AWS.Bucket = getenv("AWS_S3_BUCKET", "")
+	cfg.AWS.Region = getenv("AWS_REGION", "us-east-1")
+	cfg.AWS.AccessKeyID = getenv("AWS_ACCESS_KEY_ID", "")
+	cfg.AWS.SecretAccessKey = getenv("AWS_SECRET_ACCESS_KEY", "")
+	cfg.AWS.Endpoint = getenv("AWS_S3_ENDPOINT", "")
+	cfg.AWS.PathStyle = getenv("AWS_S3_PATH_STYLE", "false") == "true"
+	cfg.AWS.PublicURL = getenv("AWS_S3_PUBLIC_URL", "")
+	cfg.AWS.PresignTTL = getenvDuration("AWS_S3_PRESIGN_TTL", 15*time.Minute)
+	cfg.AWS.MaxUploadBytes = getenvInt64("AWS_S3_MAX_UPLOAD_BYTES", 10*1024*1024*1024)
+	cfg.AWS.AllowedMIMEs = getenvCSV("AWS_S3_ALLOWED_MIME_TYPES", []string{
+		"video/mp4",
+		"video/webm",
+		"video/quicktime",
+		"video/x-msvideo",
+		"video/matroska",
+		"video/x-matroska",
+	})
+
+	cfg.Transcoding.Enabled = getenv("TRANSCODER_ENABLED", "false") == "true"
+	cfg.Transcoding.FFmpegPath = getenv("TRANSCODER_FFMPEG_PATH", "ffmpeg")
+	cfg.Transcoding.FFprobePath = getenv("TRANSCODER_FFPROBE_PATH", "ffprobe")
+	cfg.Transcoding.WorkDir = getenv("TRANSCODER_WORK_DIR", "")
+	cfg.Transcoding.HLSSegmentSec = getenvInt("TRANSCODER_HLS_SEGMENT_SEC", 6)
+	cfg.Transcoding.QueueSize = getenvInt("TRANSCODER_QUEUE_SIZE", 32)
+	cfg.Transcoding.JobTimeout = getenvDuration("TRANSCODER_JOB_TIMEOUT", 2*time.Hour)
+	cfg.MediaPlayback.SignedTTL = getenvDuration("MEDIA_PLAYBACK_SIGNED_TTL", 3*time.Hour)
 
 	if cfg.JWTSecret == "change-me" {
 		return nil, fmt.Errorf("JWT_SECRET must be set")
@@ -131,6 +182,18 @@ func getenvInt(key string, fallback int) int {
 		return fallback
 	}
 	n, err := strconv.Atoi(val)
+	if err != nil {
+		return fallback
+	}
+	return n
+}
+
+func getenvInt64(key string, fallback int64) int64 {
+	val := os.Getenv(key)
+	if val == "" {
+		return fallback
+	}
+	n, err := strconv.ParseInt(val, 10, 64)
 	if err != nil {
 		return fallback
 	}
