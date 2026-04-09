@@ -102,7 +102,7 @@ func Load() (*Config, error) {
 	cfg.Transcoding.WorkDir = getenv("TRANSCODER_WORK_DIR", "")
 	cfg.Transcoding.HLSSegmentSec = getenvInt("TRANSCODER_HLS_SEGMENT_SEC", 6)
 	cfg.Transcoding.QueueSize = getenvInt("TRANSCODER_QUEUE_SIZE", 32)
-	cfg.Transcoding.JobTimeout = getenvDuration("TRANSCODER_JOB_TIMEOUT", 2*time.Hour)
+	cfg.Transcoding.JobTimeout = getenvDuration("TRANSCODER_JOB_TIMEOUT", 4*time.Hour)
 	cfg.MediaPlayback.SignedTTL = getenvDuration("MEDIA_PLAYBACK_SIGNED_TTL", 3*time.Hour)
 
 	if cfg.JWTSecret == "change-me" {

@@ -427,34 +427,64 @@ func (s *MediaTranscoderService) withRetry(ctx context.Context, opName, mediaID 
 	var lastErr error
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return wrapContextOpError(opName, ctx, err, lastErr)
+		}
+
 		if err := fn(); err == nil {
 			return nil
 		} else {
 			lastErr = err
+			if ctx.Err() != nil {
+				return wrapContextOpError(opName, ctx, ctx.Err(), lastErr)
+			}
 		}
 
 		if attempt == maxAttempts {
 			break
 		}
 
-		s.logger.Warn("transcoder operation retry",
+		fields := []zap.Field{
 			zap.String("operation", opName),
 			zap.String("media_id", mediaID),
 			zap.Int("attempt", attempt),
 			zap.Error(lastErr),
-		)
+		}
+		if remaining, ok := deadlineRemaining(ctx); ok {
+			fields = append(fields, zap.Duration("deadline_remaining", remaining))
+		}
+		s.logger.Warn("transcoder operation retry", fields...)
 
 		timer := time.NewTimer(backoff)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			return ctx.Err()
+			return wrapContextOpError(opName, ctx, ctx.Err(), lastErr)
 		case <-timer.C:
 		}
 		backoff *= 2
 	}
 
 	return lastErr
+}
+
+func deadlineRemaining(ctx context.Context) (time.Duration, bool) {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return 0, false
+	}
+	return time.Until(deadline), true
+}
+
+func wrapContextOpError(opName string, ctx context.Context, ctxErr error, lastErr error) error {
+	msg := fmt.Sprintf("%s: %w", opName, ctxErr)
+	if remaining, ok := deadlineRemaining(ctx); ok {
+		msg = fmt.Sprintf("%s (deadline_remaining=%s)", msg, remaining.Round(time.Millisecond))
+	}
+	if lastErr != nil && !errors.Is(lastErr, ctxErr) {
+		msg = fmt.Sprintf("%s; last error: %v", msg, lastErr)
+	}
+	return errors.New(msg)
 }
 
 type tailBuffer struct {
