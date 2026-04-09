@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -274,6 +275,37 @@ func (s *StorageService) DeleteObjectsByPrefix(ctx context.Context, prefix strin
 	return flush()
 }
 
+func (s *StorageService) ListMediaPrefixes(ctx context.Context) (map[string]string, error) {
+	if s.bucket == "" {
+		return nil, fmt.Errorf("s3 bucket is not configured")
+	}
+
+	pager := s3.NewListObjectsV2Paginator(s.s3Client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(s.bucket),
+		Prefix: aws.String("users/"),
+	})
+
+	prefixes := make(map[string]string)
+	for pager.HasMorePages() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, obj := range page.Contents {
+			key := strings.TrimSpace(aws.ToString(obj.Key))
+			mediaID, mediaPrefix, ok := extractMediaPrefix(key)
+			if !ok {
+				continue
+			}
+			if _, exists := prefixes[mediaID]; !exists {
+				prefixes[mediaID] = mediaPrefix
+			}
+		}
+	}
+
+	return prefixes, nil
+}
+
 func (s *StorageService) uploadFile(ctx context.Context, key, contentType, filePath, acl string) error {
 	if s.bucket == "" {
 		return fmt.Errorf("s3 bucket is not configured")
@@ -299,6 +331,20 @@ func (s *StorageService) uploadFile(ctx context.Context, key, contentType, fileP
 
 	_, err = s.s3Client.PutObject(ctx, input)
 	return err
+}
+
+func extractMediaPrefix(key string) (mediaID string, prefix string, ok bool) {
+	parts := strings.Split(strings.Trim(strings.TrimSpace(key), "/"), "/")
+	if len(parts) < 4 {
+		return "", "", false
+	}
+	if parts[0] != "users" || parts[2] != "media" {
+		return "", "", false
+	}
+	if strings.TrimSpace(parts[1]) == "" || strings.TrimSpace(parts[3]) == "" {
+		return "", "", false
+	}
+	return parts[3], path.Join(parts[0], parts[1], parts[2], parts[3]) + "/", true
 }
 
 func (s *StorageService) generateObjectURL(key string) string {

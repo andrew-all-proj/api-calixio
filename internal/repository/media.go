@@ -39,6 +39,7 @@ type MediaRepository interface {
 	Create(ctx context.Context, media Media) (Media, error)
 	ListByOwner(ctx context.Context, ownerUserID string) ([]Media, error)
 	GetByID(ctx context.Context, id string) (Media, error)
+	ListExistingIDs(ctx context.Context, ids []string) ([]string, error)
 	UpdateUploadState(ctx context.Context, id string, status MediaStatus, fileSizeBytes int64, mimeType string) error
 	UpdateStatus(ctx context.Context, id string, status MediaStatus) error
 	UpdateTranscodeResult(ctx context.Context, id, playbackURL string, previewURL *string, durationSec *int, status MediaStatus) error
@@ -182,6 +183,39 @@ func (r *PostgresMediaRepository) GetByID(ctx context.Context, id string) (Media
 	}
 	out.Status = MediaStatus(status)
 	return out, nil
+}
+
+func (r *PostgresMediaRepository) ListExistingIDs(ctx context.Context, ids []string) ([]string, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	query := `
+		SELECT id
+		FROM media
+		WHERE deleted_at IS NULL
+		  AND id = ANY($1)
+	`
+
+	rows, err := r.pool.Query(ctx, query, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	existing := make([]string, 0, len(ids))
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		existing = append(existing, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return existing, nil
 }
 
 func (r *PostgresMediaRepository) UpdateUploadState(ctx context.Context, id string, status MediaStatus, fileSizeBytes int64, mimeType string) error {

@@ -115,6 +115,11 @@ func main() {
 		PresignURLTTL:     cfg.AWS.PresignTTL,
 		PlaybackSignedTTL: cfg.MediaPlayback.SignedTTL,
 	})
+	mediaCleanupSvc := service.NewMediaCleanupService(service.NewMediaCleanupServiceInput{
+		MediaRepo: mediaRepo,
+		Storage:   storageSvc,
+		Logger:    logger,
+	})
 
 	jwtSvc := authn.NewJWTService(cfg.JWTSecret, cfg.AccessTTL)
 	authSvc := service.NewAuthService(userRepo, sessionRepo, jwtSvc, cfg.AccessTTL, cfg.RefreshTTL)
@@ -140,6 +145,7 @@ func main() {
 	}()
 
 	startStaleActiveRoomsCloser(roomSvc, logger, 24*time.Hour, time.Hour)
+	mediaCleanupSvc.RunDaily()
 
 	waitForShutdown(logger, srv)
 }
