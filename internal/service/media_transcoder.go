@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"os/exec"
@@ -29,6 +30,16 @@ type MediaTranscoderService struct {
 	jobTimeout      time.Duration
 	jobQueue        chan string
 	logger          *zap.Logger
+}
+
+type hlsEncodingProfile struct {
+	name      string
+	preset    string
+	crf       int
+	maxrate   string
+	bufsize   string
+	audioBitr string
+	threads   int
 }
 
 type NewMediaTranscoderServiceInput struct {
@@ -177,6 +188,11 @@ func (s *MediaTranscoderService) processMediaInWorkspace(ctx context.Context, me
 		return fmt.Errorf("download source: %w", err)
 	}
 
+	durationSec, err := s.probeDurationSec(ctx, srcPath)
+	if err != nil {
+		return err
+	}
+
 	hlsDir := filepath.Join(tmpDir, "hls")
 	if err := os.MkdirAll(hlsDir, 0o755); err != nil {
 		return err
@@ -188,13 +204,9 @@ func (s *MediaTranscoderService) processMediaInWorkspace(ctx context.Context, me
 	s.logger.Info("media conversion started",
 		zap.String("media_id", media.ID),
 		zap.String("source_key", media.StorageKey),
+		zap.Int("duration_sec", durationSec),
 	)
-	if err := s.runFFmpegHLS(ctx, srcPath, manifestPath, segmentPattern); err != nil {
-		return err
-	}
-
-	durationSec, err := s.probeDurationSec(ctx, srcPath)
-	if err != nil {
+	if err := s.runFFmpegHLS(ctx, srcPath, manifestPath, segmentPattern, durationSec); err != nil {
 		return err
 	}
 
@@ -281,22 +293,27 @@ func isNoSpaceErr(err error) bool {
 	return strings.Contains(strings.ToLower(err.Error()), "no space left on device")
 }
 
-func (s *MediaTranscoderService) runFFmpegHLS(ctx context.Context, srcPath, manifestPath, segmentPattern string) error {
+func (s *MediaTranscoderService) runFFmpegHLS(ctx context.Context, srcPath, manifestPath, segmentPattern string, durationSec int) error {
+	profile := selectHLSEncodingProfile(durationSec)
 	args := []string{
 		"-y",
+		"-hide_banner",
+		"-nostats",
+		"-loglevel", "warning",
 		"-i", srcPath,
 		"-map", "0:v:0",
 		"-map", "0:a:0?",
 		"-c:v", "libx264",
-		"-preset", "veryfast",
+		"-preset", profile.preset,
 		"-profile:v", "main",
 		"-level", "4.0",
 		"-pix_fmt", "yuv420p",
-		"-crf", "21",
-		"-maxrate", "5000k",
-		"-bufsize", "10000k",
+		"-crf", strconv.Itoa(profile.crf),
+		"-maxrate", profile.maxrate,
+		"-bufsize", profile.bufsize,
+		"-threads", strconv.Itoa(profile.threads),
 		"-c:a", "aac",
-		"-b:a", "128k",
+		"-b:a", profile.audioBitr,
 		"-ac", "2",
 		"-f", "hls",
 		"-hls_time", strconv.Itoa(s.segmentDuration),
@@ -307,16 +324,46 @@ func (s *MediaTranscoderService) runFFmpegHLS(ctx context.Context, srcPath, mani
 	}
 
 	cmd := exec.CommandContext(ctx, s.ffmpegPath, args...)
-	out, err := cmd.CombinedOutput()
+	stderr := &tailBuffer{maxBytes: 64 << 10}
+	cmd.Stdout = io.Discard
+	cmd.Stderr = stderr
+	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf("ffmpeg hls: %w: %s", err, strings.TrimSpace(string(out)))
+		return formatFFmpegError("ffmpeg hls", err, stderr.String())
 	}
 	return nil
+}
+
+func selectHLSEncodingProfile(durationSec int) hlsEncodingProfile {
+	const longMediaThresholdSec = 90 * 60
+	if durationSec >= longMediaThresholdSec {
+		return hlsEncodingProfile{
+			name:      "long-form-safe",
+			preset:    "superfast",
+			crf:       23,
+			maxrate:   "3500k",
+			bufsize:   "7000k",
+			audioBitr: "96k",
+			threads:   2,
+		}
+	}
+	return hlsEncodingProfile{
+		name:      "default",
+		preset:    "veryfast",
+		crf:       21,
+		maxrate:   "5000k",
+		bufsize:   "10000k",
+		audioBitr: "128k",
+		threads:   0,
+	}
 }
 
 func (s *MediaTranscoderService) createAndUploadPreview(ctx context.Context, srcPath, previewPath string, media repository.Media) (*string, error) {
 	args := []string{
 		"-y",
+		"-hide_banner",
+		"-nostats",
+		"-loglevel", "warning",
 		"-ss", "00:00:01",
 		"-i", srcPath,
 		"-frames:v", "1",
@@ -324,9 +371,12 @@ func (s *MediaTranscoderService) createAndUploadPreview(ctx context.Context, src
 		previewPath,
 	}
 	cmd := exec.CommandContext(ctx, s.ffmpegPath, args...)
-	out, err := cmd.CombinedOutput()
+	stderr := &tailBuffer{maxBytes: 32 << 10}
+	cmd.Stdout = io.Discard
+	cmd.Stderr = stderr
+	err := cmd.Run()
 	if err != nil {
-		return nil, fmt.Errorf("ffmpeg preview: %w: %s", err, strings.TrimSpace(string(out)))
+		return nil, formatFFmpegError("ffmpeg preview", err, stderr.String())
 	}
 
 	previewKey := path.Join("users", media.OwnerUserID, "media", media.ID, "preview", "preview.jpg")
@@ -405,6 +455,47 @@ func (s *MediaTranscoderService) withRetry(ctx context.Context, opName, mediaID 
 	}
 
 	return lastErr
+}
+
+type tailBuffer struct {
+	maxBytes int
+	buf      []byte
+}
+
+func (b *tailBuffer) Write(p []byte) (int, error) {
+	if b.maxBytes <= 0 {
+		return len(p), nil
+	}
+	if len(p) >= b.maxBytes {
+		b.buf = append(b.buf[:0], p[len(p)-b.maxBytes:]...)
+		return len(p), nil
+	}
+	needed := len(b.buf) + len(p) - b.maxBytes
+	if needed > 0 {
+		b.buf = append(b.buf[:0], b.buf[needed:]...)
+	}
+	b.buf = append(b.buf, p...)
+	return len(p), nil
+}
+
+func (b *tailBuffer) String() string {
+	return strings.TrimSpace(string(b.buf))
+}
+
+func formatFFmpegError(prefix string, err error, stderr string) error {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok && status.Signaled() && status.Signal() == syscall.SIGKILL {
+			if stderr == "" {
+				return fmt.Errorf("%s: process was killed with SIGKILL; likely OOM kill or container/node resource limit", prefix)
+			}
+			return fmt.Errorf("%s: process was killed with SIGKILL; likely OOM kill or container/node resource limit: %s", prefix, stderr)
+		}
+	}
+	if stderr == "" {
+		return fmt.Errorf("%s: %w", prefix, err)
+	}
+	return fmt.Errorf("%s: %w: %s", prefix, err, stderr)
 }
 
 func (s *MediaTranscoderService) probeDurationSec(ctx context.Context, srcPath string) (int, error) {
