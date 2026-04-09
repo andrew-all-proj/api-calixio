@@ -341,10 +341,14 @@ func (h *Handler) EndRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	room, err := h.rooms.EndRoom(r.Context(), roomID)
+	room, err := h.rooms.EndRoomByOwner(r.Context(), roomID, userID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			httputil.RespondError(w, http.StatusNotFound, "room_not_found")
+			return
+		}
+		if errors.Is(err, service.ErrRoomForbidden) {
+			httputil.RespondError(w, http.StatusForbidden, "room_forbidden")
 			return
 		}
 		h.logger.Error("end room", zap.Error(err))

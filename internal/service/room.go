@@ -115,16 +115,31 @@ func (s *RoomService) UpdateRoomState(ctx context.Context, roomID, ownerUserID, 
 	return s.rooms.UpdateRoomMedia(ctx, roomID, nextMediaID)
 }
 
+func (s *RoomService) EndRoomByOwner(ctx context.Context, roomID, ownerUserID string) (repository.Room, error) {
+	room, err := s.rooms.GetRoomByID(ctx, roomID)
+	if err != nil {
+		return repository.Room{}, err
+	}
+	if room.OwnerUserID != ownerUserID {
+		return repository.Room{}, ErrRoomForbidden
+	}
+	return s.endRoom(ctx, room)
+}
+
 func (s *RoomService) EndRoom(ctx context.Context, roomID string) (repository.Room, error) {
 	room, err := s.rooms.GetRoomByID(ctx, roomID)
 	if err != nil {
 		return repository.Room{}, err
 	}
+	return s.endRoom(ctx, room)
+}
+
+func (s *RoomService) endRoom(ctx context.Context, room repository.Room) (repository.Room, error) {
 	if room.Status != repository.RoomActive {
 		return room, nil
 	}
 	endedAt := s.clock()
-	if err := s.rooms.EndRoom(ctx, roomID, endedAt); err != nil {
+	if err := s.rooms.EndRoom(ctx, room.ID, endedAt); err != nil {
 		return repository.Room{}, err
 	}
 	if err := s.lk.DeleteRoom(ctx, room.Name); err != nil {
