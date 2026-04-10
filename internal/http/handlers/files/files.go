@@ -128,6 +128,8 @@ func (h *Handler) CompleteMediaUpload(w http.ResponseWriter, r *http.Request) {
 			httputil.RespondError(w, http.StatusNotFound, "media_not_found")
 		case errors.Is(err, service.ErrForbiddenMedia):
 			httputil.RespondError(w, http.StatusForbidden, "media_forbidden")
+		case errors.Is(err, service.ErrUploadedObjectNotFound):
+			httputil.RespondError(w, http.StatusNotFound, "uploaded_object_not_found")
 		case errors.Is(err, service.ErrInvalidUploadInput):
 			httputil.RespondError(w, http.StatusBadRequest, "invalid_uploaded_object")
 		default:

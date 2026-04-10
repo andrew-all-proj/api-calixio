@@ -20,6 +20,7 @@ var (
 	ErrInvalidUploadInput = errors.New("invalid upload input")
 	ErrForbiddenMedia     = errors.New("forbidden media")
 	ErrMediaNotReady      = errors.New("media is not ready")
+	ErrUploadedObjectNotFound = errors.New("uploaded object not found")
 	ErrStorageDelete      = errors.New("media storage delete failed")
 	ErrInvalidManifestKey = errors.New("invalid playback manifest token")
 )
@@ -214,6 +215,9 @@ func (s *MediaUploadService) CompleteUpload(ctx context.Context, in CompleteUplo
 
 	head, err := s.storage.HeadObject(ctx, media.StorageKey)
 	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return CompleteUploadOutput{}, ErrUploadedObjectNotFound
+		}
 		return CompleteUploadOutput{}, err
 	}
 	if head.ContentLength <= 0 {
